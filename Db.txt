@@ -1,0 +1,228 @@
+create table admin_comment
+(
+	id int not null auto_increment
+		primary key,
+	courseId int not null,
+	comment varchar(255) not null,
+	constraint admin_comment_fk_to_course
+		foreign key (courseId) references armcourse.course (id)
+			on update cascade on delete cascade
+);
+
+create table authentication
+(
+	id int not null auto_increment
+		primary key,
+	role varchar(40) not null
+);
+
+create table category
+(
+	id int not null auto_increment
+		primary key,
+	name varchar(64) not null,
+	constraint name
+		unique (name)
+);
+
+create table course
+(
+	id int not null auto_increment
+		primary key,
+	status int default '3',
+	name varchar(128) not null,
+	description blob null,
+	rating double default '0',
+	reviewCount int default '0',
+	teacherId int null,
+	subCategoryId int not null,
+	price int default '0' not null,
+	constraint name
+		unique (name),
+	constraint course_ibfk_1
+		foreign key (status) references armcourse.rf_course_status (id),
+	constraint course_fk_to_user
+		foreign key (teacherId) references armcourse.user (id)
+			on update cascade on delete set null,
+	constraint course_fk_to_subcategory
+		foreign key (subCategoryId) references armcourse.subcategory (id)
+			on update cascade on delete cascade
+);
+
+create table course_info
+(
+	courseId int not null
+		primary key,
+	totalHours double default '0' null,
+	totalMaterials int default '0' null,
+	constraint courseId
+		unique (courseId),
+	constraint courseId_2
+		unique (courseId),
+	constraint course_info_ibfk_1
+		foreign key (courseId) references armcourse.course (id)
+			on update cascade on delete cascade
+);
+
+create table course_item
+(
+	id int not null auto_increment
+		primary key,
+	isPublic tinyint(1) default '0',
+	sectionId int not null,
+	name varchar(64) not null,
+	constraint course_item_fk_to_section
+		foreign key (sectionId) references armcourse.section (id)
+			on update cascade on delete cascade
+);
+
+create table resource
+(
+	id int not null auto_increment
+		primary key,
+	courseItemId int not null,
+	resourceTypeId int not null,
+	resourceName varchar(64) null,
+	constraint resource_fk_to_course_item
+		foreign key (courseItemId) references armcourse.course_item (id)
+			on update cascade on delete cascade,
+	constraint resource_ibfk_2
+		foreign key (resourceTypeId) references armcourse.rf_resource_type (id)
+);
+
+create table rf_course_status
+(
+	id int not null auto_increment
+		primary key,
+	status varchar(32) not null,
+	constraint status
+		unique (status)
+);
+
+create table rf_resource_type
+(
+	id int not null auto_increment
+		primary key,
+	type varchar(32) not null,
+	constraint type
+		unique (type)
+);
+
+create table section
+(
+	id int not null auto_increment
+		primary key,
+	name varchar(64) not null,
+	courseId int not null,
+	constraint name
+		unique (name, courseId),
+	constraint section_fk_tocourse
+		foreign key (courseId) references armcourse.course (id)
+			on update cascade on delete cascade
+);
+
+create table student_course
+(
+	studentId int not null,
+	courseId int not null,
+	rating int null,
+	review varchar(255) null,
+	id int not null auto_increment
+		primary key,
+	constraint studentId
+		unique (studentId, courseId),
+	constraint student_fk_to_student
+		foreign key (studentId) references armcourse.user (id)
+			on update cascade on delete cascade,
+	constraint course_fk_to_course
+		foreign key (courseId) references armcourse.course (id)
+			on update cascade on delete cascade
+);
+
+create table student_course_request
+(
+	id int not null auto_increment
+		primary key,
+	studentId int not null,
+	courseId int not null,
+	constraint studentId
+		unique (studentId, courseId),
+	constraint student_request_fk_to_student
+		foreign key (studentId) references armcourse.user (id)
+			on update cascade on delete cascade,
+	constraint course_request_fk_to_course
+		foreign key (courseId) references armcourse.course (id)
+			on update cascade on delete cascade
+);
+
+create table subcategory
+(
+	id int not null auto_increment
+		primary key,
+	name varchar(64) not null,
+	categoryId int not null,
+	constraint name
+		unique (name),
+	constraint category_fk_to_subcategory
+		foreign key (categoryId) references armcourse.category (id)
+			on update cascade on delete cascade
+);
+
+create table user
+(
+	id int not null auto_increment
+		primary key,
+	firstName varchar(32) not null,
+	lastName varchar(32) not null,
+	email varchar(64) not null,
+	enabled tinyint(1) default '1' null,
+	password varchar(40) not null,
+	roleId int not null,
+	constraint email
+		unique (email),
+	constraint fk_role_id
+		foreign key (roleId) references armcourse.authentication (id)
+);
+
+create table user_session
+(
+	id int not null auto_increment
+		primary key,
+	token varchar(511) not null,
+	userId int null,
+	constraint token
+		unique (token),
+	constraint userId
+		unique (userId),
+	constraint session_fk_to_user
+		foreign key (userId) references armcourse.user (id)
+			on update cascade on delete cascade
+);
+
+
+
+CREATE TRIGGER after_student_course_rating_update
+  AFTER UPDATE on student_course
+  FOR EACH ROW
+BEGIN
+  UPDATE course
+    SET course.rating = (SELECT AVG(rating)
+          FROM student_course
+          WHERE student_course.courseId = course.id),
+        course.reviewCount = (SELECT COUNT(*)
+          FROM student_course
+          WHERE student_course.courseId = course.id);
+END;
+
+CREATE TRIGGER after_student_course_rating_insert
+AFTER INSERT on student_course
+FOR EACH ROW
+  BEGIN
+    UPDATE course
+    SET course.rating = (SELECT AVG(rating)
+                         FROM student_course
+                         WHERE student_course.courseId = course.id),
+      course.reviewCount = (SELECT COUNT(*)
+                            FROM student_course
+                            WHERE student_course.courseId = course.id);
+  END;
